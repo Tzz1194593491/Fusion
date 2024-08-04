@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -25,6 +26,8 @@ type (
 	}
 )
 
+// 初始化相关
+
 // New 创建一个引擎
 func New() *Engine {
 	engine := &Engine{router: newRouter()}
@@ -44,6 +47,8 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 	engine.groups = append(engine.groups, newGroup)
 	return newGroup
 }
+
+// 路由相关
 
 func (group *RouterGroup) addRouter(method string, comp string, handler HandlerFunc) {
 	// 支持同个分组下的公共前缀
@@ -72,6 +77,31 @@ func (group *RouterGroup) Run(addr string) (err error) {
 func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
 	group.middleware = append(group.middleware, middlewares...)
 }
+
+// 静态资源处理
+
+func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	absolutePath := path.Join(group.prefix, relativePath)
+	// 去掉请求前缀，例如前缀为/v1/group，那么/v1/group/assert/main.js会被处理为/assert/main.js
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(c *Context) {
+		file := c.Param("filepath")
+		// 检查对应文件是否存在
+		if _, err := fs.Open(file); err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		fileServer.ServeHTTP(c.Writer, c.Req)
+	}
+}
+
+func (group *RouterGroup) Static(relativePath string, root string) {
+	handler := group.createStaticHandler(relativePath, http.Dir(root))
+	urlPattern := path.Join(relativePath, "/*filepath")
+	group.GET(urlPattern, handler)
+}
+
+// 实现Handle接口
 
 // ServeHTTP 每次请求过来，都会走这个方法
 func (group *RouterGroup) ServeHTTP(w http.ResponseWriter, req *http.Request) {
