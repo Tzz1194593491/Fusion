@@ -8,6 +8,8 @@ import (
 
 func newTestRouter() *router {
 	r := newRouter()
+	// 加入/*filepath后无法正常匹配
+	r.addRouter("GET", "/*filepath", nil)
 	r.addRouter("GET", "/", nil)
 	r.addRouter("GET", "/hello/:name", nil)
 	r.addRouter("GET", "/assert/*filepath", nil)

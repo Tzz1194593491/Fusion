@@ -14,7 +14,7 @@ type node struct {
 // matchChild 第一个匹配成功的节点，用于插入
 func (n *node) matchChild(part string) *node {
 	for _, child := range n.children {
-		if child.part == part || child.isWild {
+		if child.part == part {
 			return child
 		}
 	}
@@ -42,7 +42,7 @@ func (n *node) insert(pattern string, parts []string, height int) {
 	child := n.matchChild(part)
 	if child == nil {
 		child = &node{part: part, isWild: part[0] == ':' || part[0] == '*'}
-		n.children = append(n.children, child)
+		n.sortInsert(child)
 	}
 	child.insert(pattern, parts, height+1)
 }
@@ -64,4 +64,13 @@ func (n *node) search(parts []string, height int) *node {
 		}
 	}
 	return nil
+}
+
+// sortInsert 排序并插入，该函数目的在于降低":"和"*"的优先级
+func (n *node) sortInsert(child *node) {
+	if strings.HasPrefix(child.part, "*") || strings.HasPrefix(child.part, ":") {
+		n.children = append(n.children, child)
+		return
+	}
+	n.children = append([]*node{child}, n.children...)
 }
