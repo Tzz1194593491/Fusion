@@ -36,6 +36,13 @@ func New() *Engine {
 	return engine
 }
 
+// Default 创建一个默认的实例，默认使用Logger、Recovery中间件
+func Default() *Engine {
+	engine := New()
+	engine.Use(Recovery(), Logger())
+	return engine
+}
+
 // Group 创建一个新的分组，并只想唯一的engine
 func (group *RouterGroup) Group(prefix string) *RouterGroup {
 	engine := group.engine
