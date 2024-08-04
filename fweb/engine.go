@@ -1,36 +1,91 @@
 package fweb
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"strings"
 )
 
 // HandlerFunc 请求处理方法
 type HandlerFunc func(*Context)
 
-type Engine struct {
-	router *router
-}
+type (
+	RouterGroup struct {
+		prefix     string
+		middleware []HandlerFunc
+		parent     *RouterGroup
+		engine     *Engine
+	}
+
+	Engine struct {
+		*RouterGroup
+		router *router
+		groups []*RouterGroup // 存储所有的RouterGroup，包括Engine自己的
+	}
+)
 
 // New 创建一个引擎
 func New() *Engine {
-	return &Engine{router: newRouter()}
+	engine := &Engine{router: newRouter()}
+	engine.RouterGroup = &RouterGroup{engine: engine}
+	engine.groups = []*RouterGroup{engine.RouterGroup}
+	return engine
 }
 
-func (engine *Engine) GET(pattern string, handler HandlerFunc) {
-	engine.router.addRouter("GET", pattern, handler)
+// Group 创建一个新的分组，并只想唯一的engine
+func (group *RouterGroup) Group(prefix string) *RouterGroup {
+	engine := group.engine
+	newGroup := &RouterGroup{
+		engine: engine,
+		prefix: group.prefix + prefix,
+		parent: group,
+	}
+	engine.groups = append(engine.groups, newGroup)
+	return newGroup
 }
 
-func (engine *Engine) POST(pattern string, handler HandlerFunc) {
-	engine.router.addRouter("POST", pattern, handler)
+func (group *RouterGroup) addRouter(method string, comp string, handler HandlerFunc) {
+	// 支持同个分组下的公共前缀
+	pattern := group.prefix + comp
+	log.Printf("Route %4s - %s", method, pattern)
+	group.engine.router.addRouter(method, pattern, handler)
+}
+
+func (group *RouterGroup) GET(pattern string, handler HandlerFunc) {
+	group.addRouter("GET", pattern, handler)
+}
+
+func (group *RouterGroup) POST(pattern string, handler HandlerFunc) {
+	group.addRouter("POST", pattern, handler)
 }
 
 // Run 运行服务
-func (engine *Engine) Run(addr string) (err error) {
-	return http.ListenAndServe(addr, engine)
+func (group *RouterGroup) Run(addr string) (err error) {
+	if !strings.HasPrefix(addr, ":") {
+		addr = fmt.Sprintf(":%s", addr)
+	}
+	return http.ListenAndServe(addr, group)
+}
+
+// Use 添加中间件到请求处理中
+func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
+	group.middleware = append(group.middleware, middlewares...)
 }
 
 // ServeHTTP 每次请求过来，都会走这个方法
-func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (group *RouterGroup) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	// todo：此处可探索是否可以优化
+	for _, group := range group.engine.groups {
+		// 此步的意思是，将获取对应组的所有父组中间件
+		// 例如：v1组中有个product组，product组中有个get路由，完整路由如下：/v1/product/get
+		// 那么获取中间件时，需要获取v1组的和product组的，下方代码正是完成此功能
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middleware...)
+		}
+	}
 	c := newContext(w, req)
-	engine.router.handle(c)
+	c.handlers = middlewares
+	group.engine.router.handle(c)
 }
