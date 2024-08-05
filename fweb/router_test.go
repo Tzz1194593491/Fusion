@@ -2,6 +2,9 @@ package fweb
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -17,6 +20,16 @@ func newTestRouter() *router {
 	r.addRouter("GET", "/assert/*filepath", nil)
 	r.addRouter("POST", "/hello/a/b", nil)
 	r.addRouter("POST", "/hi/:name", nil)
+	return r
+}
+
+func newTestRouter2() *router {
+	r := newRouter()
+	r.addRouter("GET", "/", nil)
+	r.addRouter("GET", "/hello/:name", nil)
+	r.addRouter("GET", "/assert/*filepath", nil)
+	r.addRouter("GET", "/hello/a/b", nil)
+	r.addRouter("GET", "/hi/:name", nil)
 	return r
 }
 
@@ -45,4 +58,26 @@ func TestGetRoute(t *testing.T) {
 		t.Fatal("name should be equal to '123'")
 	}
 	fmt.Printf("matched path: %s, params['name']: %s\n", n.pattern, ps["name"])
+}
+
+func TestGetRouteURL404(t *testing.T) {
+	r := newTestRouter2()
+	n, ps := r.getRoute("GET", "/hello/okokda/12331231231")
+	assert.Nil(t, n, "expect n is nil")
+	assert.Nil(t, ps, "expect ps is nil")
+}
+
+func TestGetRouteMethod404(t *testing.T) {
+	r := newTestRouter2()
+	n, ps := r.getRoute("POST", "/hello/123")
+	assert.Nil(t, n, "expect n is nil")
+	assert.Nil(t, ps, "expect ps is nil")
+}
+
+func TestGetRouteHandle404(t *testing.T) {
+	r := newTestRouter2()
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/hihi/123", nil)
+	r.handle(newContext(w, req))
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
