@@ -19,22 +19,6 @@ func newRouter() *router {
 	}
 }
 
-// parsePattern 处理pattern中的‘*’
-// 例如："/a/b/*/c" -> ["a","b","*"]
-func parsePattern(pattern string) []string {
-	pieces := strings.Split(pattern, "/")
-	parts := make([]string, 0)
-	for _, item := range pieces {
-		if item != "" {
-			parts = append(parts, item)
-			if item[0] == '*' {
-				break
-			}
-		}
-	}
-	return parts
-}
-
 // addRouter 添加路由
 func (r *router) addRouter(method string, pattern string, handler HandlerFunc) {
 	parts := parsePattern(pattern)
